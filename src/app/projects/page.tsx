@@ -16,8 +16,41 @@ export default function ProjectsPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
 
+  // ★追加：検索＆ページング
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(1); // 1-based
+  const [pageSize, setPageSize] = useState(5);
+
+  // 取得データを「アクティブ/アーカイブ」に分けるのは従来通り
   const active = useMemo(() => items.filter((x) => !x.isArchived), [items]);
   const archived = useMemo(() => items.filter((x) => x.isArchived), [items]);
+
+  // ★追加：検索対象（まずは「アクティブ」だけ検索＆ページング）
+  // ※アーカイブも検索対象にしたいなら後で拡張可能
+  const activeFiltered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return active;
+    return active.filter((p) => p.name.toLowerCase().includes(s));
+  }, [active, q]);
+
+  // ★追加：ページ計算
+  const totalActiveFiltered = activeFiltered.length;
+  const totalPages = Math.max(1, Math.ceil(totalActiveFiltered / pageSize));
+
+  // ページが範囲外に行かないようにガード（pageSize変更/検索変更でズレるため）
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  const activePageItems = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return activeFiltered.slice(start, start + pageSize);
+  }, [activeFiltered, safePage, pageSize]);
+
+  type Me = { userId: number; email: string; displayName: string; role: "Leader" | "Worker" };
+const isLeader = me?.role === "Leader";
+  // ★検索文字が変わったらページを1に戻す（自然なUX）
+  useEffect(() => {
+    setPage(1);
+  }, [q, pageSize]);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,30 +218,125 @@ export default function ProjectsPage() {
               alignItems: "center",
               justifyContent: "space-between",
               gap: 10,
+              flexWrap: "wrap",
             }}
           >
             <div style={{ color: "#cbd5e1", fontSize: 13 }}>
-              {busy ? "読み込み中…" : `${active.length} 件（アーカイブ ${archived.length} 件）`}
+              {busy
+                ? "読み込み中…"
+                : `進行中 ${active.length} 件 / アーカイブ ${archived.length} 件`}
             </div>
 
-            <button
-              type="button"
-              onClick={() => r.refresh()}
-              style={{
-                padding: "8px 10px",
-                borderRadius: 12,
-                border: "1px solid #2a2a2a",
-                background: "#171717",
-                color: "#e5e7eb",
-                cursor: "pointer",
-                fontSize: 12,
-              }}
-            >
-              再読み込み
-            </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+  {isLeader && (
+    <button
+      type="button"
+      onClick={() => r.push("/projects/new")}
+      style={{
+        padding: "8px 10px",
+        borderRadius: 12,
+        border: "1px solid rgba(16,185,129,.28)",
+        background: "rgba(16,185,129,.10)",
+        color: "#d1fae5",
+        cursor: "pointer",
+        fontSize: 12,
+        whiteSpace: "nowrap",
+      }}
+    >
+      ＋ 新規作成
+    </button>
+  )}
+
+  <button
+    type="button"
+    onClick={() => r.refresh()}
+    style={{
+      padding: "8px 10px",
+      borderRadius: 12,
+      border: "1px solid #2a2a2a",
+      background: "#171717",
+      color: "#e5e7eb",
+      cursor: "pointer",
+      fontSize: 12,
+    }}
+  >
+    再読み込み
+  </button>
+            </div>
           </div>
 
           <div style={{ padding: 14 }}>
+            {/* ★追加：検索＋ページサイズ */}
+            {!busy && items.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center",
+                  marginBottom: 12,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ flex: "1 1 260px" }}>
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="プロジェクト名で検索（進行中）"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      border: "1px solid #2a2a2a",
+                      background: "#171717",
+                      color: "#e5e7eb",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setQ("")}
+                  disabled={!q.trim()}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid #2a2a2a",
+                    background: q.trim() ? "#171717" : "#141414",
+                    color: "#e5e7eb",
+                    cursor: q.trim() ? "pointer" : "not-allowed",
+                    fontSize: 12,
+                  }}
+                >
+                  クリア
+                </button>
+
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid #2a2a2a",
+                    background: "#171717",
+                    color: "#e5e7eb",
+                    outline: "none",
+                    fontSize: 12,
+                  }}
+                >
+                  <option value={5}>5件/ページ</option>
+                  <option value={10}>10件/ページ</option>
+                  <option value={20}>20件/ページ</option>
+                </select>
+
+                <div style={{ color: "#9ca3af", fontSize: 12 }}>
+                  {q.trim()
+                    ? `検索結果: ${totalActiveFiltered} 件`
+                    : `表示: ${totalActiveFiltered} 件`}
+                </div>
+              </div>
+            )}
+
             {/* Loading */}
             {busy && (
               <div style={{ display: "grid", gap: 10 }}>
@@ -248,10 +376,49 @@ export default function ProjectsPage() {
             {/* List */}
             {!busy && items.length > 0 && (
               <div style={{ display: "grid", gap: 10 }}>
-                {active.map((p) => (
+                {/* ★進行中：検索＋ページング済み */}
+                {activePageItems.map((p) => (
                   <ProjectRow key={p.projectId} p={p} />
                 ))}
 
+                {/* ★ページングUI（進行中のみ） */}
+                {totalPages > 1 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: 8,
+                      marginTop: 10,
+                      paddingTop: 10,
+                      borderTop: "1px solid #2a2a2a",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setPage((v) => Math.max(1, v - 1))}
+                      disabled={safePage <= 1}
+                      style={pagerBtnStyle(safePage <= 1)}
+                    >
+                      前へ
+                    </button>
+
+                    <div style={{ color: "#cbd5e1", fontSize: 12, padding: "10px 6px" }}>
+                      {safePage} / {totalPages}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setPage((v) => Math.min(totalPages, v + 1))}
+                      disabled={safePage >= totalPages}
+                      style={pagerBtnStyle(safePage >= totalPages)}
+                    >
+                      次へ
+                    </button>
+                  </div>
+                )}
+
+                {/* アーカイブは従来通り（ページングしない） */}
                 {archived.length > 0 && (
                   <>
                     <div
@@ -276,7 +443,7 @@ export default function ProjectsPage() {
 
             {/* Footnote */}
             <p style={{ margin: "14px 2px 0", color: "#9ca3af", fontSize: 12, lineHeight: 1.6 }}>
-              ※ エラーになる場合は、API のエンドポイント名 / Authorize / CORS / Cookie(token) を確認してください。
+              ※ 件数が増えた場合は、API側で q / page / pageSize を受けて DBで絞り込み＋Skip/Take に拡張できます。
             </p>
           </div>
         </section>
@@ -346,4 +513,17 @@ function ProjectRow({ p }: { p: Project }) {
       )}
     </div>
   );
+}
+
+function pagerBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #2a2a2a",
+    background: disabled ? "#141414" : "#171717",
+    color: "#e5e7eb",
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontSize: 12,
+    minWidth: 70,
+  };
 }
