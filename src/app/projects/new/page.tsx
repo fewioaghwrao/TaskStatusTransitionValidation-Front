@@ -62,6 +62,8 @@ export default function NewProjectPage() {
       setErr("この操作はリーダーのみ可能です。");
       return;
     }
+      const ok = window.confirm(`案件（プロジェクト）を作成します。\n\nプロジェクト名: ${n}\n\nよろしいですか？`);
+  if (!ok) return;
 
     try {
       setSaving(true);
