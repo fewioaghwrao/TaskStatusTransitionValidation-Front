@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Task Status Transition Validation – Frontend (Lancers向け説明文)
+## 📌 概要（何ができる？）
 
-## Getting Started
+タスク管理における 状態遷移（ToDo / Doing / Blocked / Done） を、画面上で分かりやすく操作・確認できる Webフロントエンドです。
+「UI側の操作ミス」や「想定外の手順」でも破綻しないよう、API側で遷移制御されており、フロントはそれを前提に 使いやすさ・見やすさを重視して実装しています。
 
-First, run the development server:
+- タスクを一覧で管理（検索・ページング）
+- タスク詳細から状態変更（遷移ルールに沿って操作）
+- 権限（例：Leader / Member）に応じたUI制御
+- エラー時もユーザーが迷いにくい導線（エラーページ/再ログイン誘導など）
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🔗 デモ（動作確認）
+- Web（フロント）：https://xxxxx（※ここにURL）
+- API（Swagger）：https://xxxxx/swagger（※任意）
+- ヘルスチェック：https://xxxxx/health
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+※デモ用アカウント
+- Email：demo1@example.com
+- Password：Demo1234!
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🧩 画面イメージ（構成）
+- ログイン
+- プロジェクト一覧（検索・ページング）
+- プロジェクト詳細（タスク一覧）
+- タスク詳細（状態遷移・編集）
+- 新規作成（プロジェクト / タスク）
+- エラー（404 / 例外時）画面
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 💡 設計・実装のポイント
+- 業務アプリらしい操作感（一覧 → 詳細 → 編集の導線を明確化）
+- UIは薄く、判断はAPIへ：状態遷移の正当性はサーバーで保証
+  → フロントは「表示・操作性」に集中でき、保守性が上がる構成
+- 認証ありのSPA的な体験（JWTでのログイン、ログアウト、認可エラー時の遷移）
+- 拡張を前提にした作り（コンポーネント分割 / APIアクセス共通化）
 
-## Learn More
+## 🛠 技術スタック
+- Next.js（TypeScript）
+- API 通信（JWT Bearer / Authorization ヘッダー）
+- 画面：一覧（検索・ページング）、詳細、作成、エラーハンドリング
+- CORS 前提のフロント・バック分離構成
 
-To learn more about Next.js, take a look at the following resources:
+（UIライブラリ等があるなら追記：例）
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- UI：shadcn/ui / Tailwind CSS
+- Form：React Hook Form
+- Validation：zod
+- etc…
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## ✅ 想定利用シーン（案件の刺さりどころ）
 
-## Deploy on Vercel
+- 既存Webシステムの 画面改修（一覧・検索・導線改善）
+- 管理画面の追加（CRUD、権限別の表示出し分け）
+- API連携があるフロント開発（JWT認証、エラーハンドリング含む）
+- 「業務ロジックはAPI、UIはフロント」の分離構成案件
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---------------------------------------
+# memo
+## Lancers掲載用：一言キャッチ（短文）
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+下から好みで選べます。
+
+- 状態遷移ルールを破らせないタスク管理UI（Next.js + TypeScript）
+- 業務アプリの定番導線（一覧/検索/ページング/詳細/編集）を揃えたフロント実装
+- JWT認証＋API分離構成の管理画面サンプル（保守しやすい作り）
+
+## Lancersの「提案文」に混ぜやすい2行（テンプレ）
+- 「API分離構成（JWT認証/CORS）で、画面は操作性と保守性を重視して実装しています」
+- 「一覧の検索・ページング、権限による表示制御、認可エラー時の遷移まで含めて対応可能です」
