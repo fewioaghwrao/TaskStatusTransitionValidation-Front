@@ -262,9 +262,14 @@ export default function LoginPage() {
                 color: "rgba(255,255,255,.65)"
               }}
             >
-              <span>※ アカウントをお持ちでない場合は管理者へご連絡ください。</span>
-              {/* 将来 /auth/forgot など作るならここに */}
-              <span style={{ opacity: 0.7 }}>v0.1</span>
+<div style={{ marginTop: 12, fontSize: 12, lineHeight: 1.6, textAlign: "center" }}>
+  <div>
+    ※ 本システムはデモ環境です。ログイン情報がない場合は管理者へご連絡ください。
+  </div>
+  <div style={{ opacity: 0.7, marginTop: 4 }}>
+    v0.1 demo
+  </div>
+</div>
             </div>
           </div>
         </section>

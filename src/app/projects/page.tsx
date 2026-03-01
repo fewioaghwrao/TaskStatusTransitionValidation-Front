@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiFetch, logout } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { FullScreenLoading } from "@/components/FullScreenLoading";
 
 type Project = { projectId: number; name: string; isArchived: boolean };
 type Me = { userId: number; email: string; displayName: string };
@@ -15,6 +16,19 @@ export default function ProjectsPage() {
 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
+
+  // ★追加：ログアウト確認モーダル
+  const [logoutOpen, setLogoutOpen] = useState(false);
+
+  const requestLogout = () => setLogoutOpen(true);
+
+  const confirmLogout = () => {
+    setLogoutOpen(false);
+    logout();
+    r.push("/login");
+  };
+
+  const cancelLogout = () => setLogoutOpen(false);
 
   // ★追加：検索＆ページング
   const [q, setQ] = useState("");
@@ -93,6 +107,7 @@ const isLeader = me?.role === "Leader";
         color: "#e5e7eb",
       }}
     >
+      <FullScreenLoading show={busy} label="読み込み中…" subLabel="タスク情報を取得しています" />
       <div style={{ maxWidth: 980, margin: "28px auto" }}>
         {/* Header */}
         <header
@@ -161,21 +176,21 @@ const isLeader = me?.role === "Leader";
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={onLogout}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #2a2a2a",
-                background: "#1a1a1a",
-                color: "#e5e7eb",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              ログアウト
-            </button>
+<button
+  type="button"
+  onClick={requestLogout}
+  style={{
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #2a2a2a",
+    background: "#1a1a1a",
+    color: "#e5e7eb",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  }}
+>
+  ログアウト
+</button>
           </div>
         </header>
 
@@ -448,6 +463,16 @@ const isLeader = me?.role === "Leader";
           </div>
         </section>
       </div>
+      <ConfirmDialog
+  open={logoutOpen}
+  title="ログアウトしますか？"
+  message="ログアウトすると、再度ログインが必要になります。"
+  confirmText="ログアウト"
+  cancelText="キャンセル"
+  danger
+  onConfirm={confirmLogout}
+  onCancel={cancelLogout}
+/>
     </main>
   );
 }
@@ -526,4 +551,122 @@ function pagerBtnStyle(disabled: boolean): React.CSSProperties {
     fontSize: 12,
     minWidth: 70,
   };
+}
+function ConfirmDialog(props: {
+  open: boolean;
+  title: string;
+  message?: string;
+  confirmText?: string;
+  cancelText?: string;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const {
+    open,
+    title,
+    message,
+    confirmText = "OK",
+    cancelText = "キャンセル",
+    danger,
+    onConfirm,
+    onCancel,
+  } = props;
+
+  // Escで閉じたい場合（任意）
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onMouseDown={(e) => {
+        // 背景クリックで閉じる
+        if (e.target === e.currentTarget) onCancel();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.55)",
+        display: "grid",
+        placeItems: "center",
+        zIndex: 9999,
+        padding: 16,
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 520,
+          borderRadius: 16,
+          border: "1px solid #2a2a2a",
+          background: "#1a1a1a",
+          boxShadow: "0 16px 50px rgba(0,0,0,.45)",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ padding: 14, borderBottom: "1px solid #2a2a2a" }}>
+          <div style={{ fontSize: 12, color: "#9ca3af" }}>Confirm</div>
+          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900, color: "#e5e7eb" }}>{title}</div>
+          {message && (
+            <div style={{ marginTop: 8, fontSize: 13, color: "#9ca3af", lineHeight: 1.7 }}>
+              {message}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            padding: 14,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid #2a2a2a",
+              background: "#171717",
+              color: "#e5e7eb",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {cancelText}
+          </button>
+
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: danger ? "1px solid rgba(239,68,68,.35)" : "1px solid rgba(59,130,246,.35)",
+              background: danger ? "rgba(239,68,68,.12)" : "rgba(59,130,246,.14)",
+              color: danger ? "#fee2e2" : "#dbeafe",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

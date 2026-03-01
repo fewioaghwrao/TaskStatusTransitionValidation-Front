@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { FullScreenLoading } from "@/components/FullScreenLoading";
 
 type Me = { userId: number; email: string; displayName: string; role: "Leader" | "Worker" };
 type ProjectDetail = { projectId: number; name: string; isArchived: boolean };
@@ -92,6 +93,7 @@ export default function NewProjectPage() {
         color: "#e5e7eb",
       }}
     >
+      <FullScreenLoading show={busy} label="処理中…" subLabel="ユーザー情報 / メンバー情報を取得しています" />
       <div style={{ maxWidth: 720, margin: "28px auto" }}>
         <header style={{ marginBottom: 16 }}>
           <div

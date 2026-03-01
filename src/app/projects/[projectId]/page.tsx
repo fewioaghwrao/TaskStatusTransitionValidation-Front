@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { FullScreenLoading } from "@/components/FullScreenLoading";
 
 type TaskState = "ToDo" | "Doing" | "Blocked" | "Done";
 type TaskPriority = "High" | "Medium" | "Low";
@@ -33,7 +34,37 @@ type ProjectDetailResponse = {
   isArchived: boolean;
 };
 
+type ProjectMemberDto = {
+  userId: number;
+  displayName: string;
+  email: string;
+};
 
+type DueFilter = "All" | "Overdue" | "DueSoon";
+
+function toYmdNumber(iso: string | null): number | null {
+  if (!iso) return null;
+  const ymd = iso.length >= 10 ? iso.slice(0, 10) : iso; // "YYYY-MM-DD"
+  const n = Number(ymd.replaceAll("-", ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function ymdNumberFromDate(d: Date): number {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return Number(`${yyyy}${mm}${dd}`);
+}
+
+function addDaysYmdNumber(baseYmd: number, days: number): number {
+  const s = String(baseYmd);
+  const y = Number(s.slice(0, 4));
+  const m = Number(s.slice(4, 6)) - 1;
+  const d = Number(s.slice(6, 8));
+  const dt = new Date(y, m, d);
+  dt.setDate(dt.getDate() + days);
+  return ymdNumberFromDate(dt);
+}
 
 const states: TaskState[] = ["ToDo", "Doing", "Blocked", "Done"];
 const priorities: TaskPriority[] = ["High", "Medium", "Low"];
@@ -93,7 +124,75 @@ function safeStringify(v: unknown) {
   }
 }
 
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
 
+  // CSVルール：ダブルクォートは "" に、必要なら全体を "..." で囲む
+  const needsQuote = /[",\r\n]/.test(s);
+  const escaped = s.replace(/"/g, '""');
+  return needsQuote ? `"${escaped}"` : escaped;
+}
+
+function withUtf8Bom(s: string) {
+  // Excel対策：UTF-8 BOM
+  return "\uFEFF" + s;
+}
+
+function formatDateForCsv(iso: string | null) {
+  if (!iso) return "";
+  return iso.length >= 10 ? iso.slice(0, 10) : iso;
+}
+
+function sanitizeFileName(name: string) {
+  // Windows等でNGな文字を置換
+  return name.replace(/[\\/:*?"<>|]/g, "_").trim();
+}
+
+function buildTasksCsvRows(args: {
+  tasks: TaskItem[];
+  members: ProjectMemberDto[];
+}): string {
+  const { tasks, members } = args;
+
+  const memberMap = new Map<number, ProjectMemberDto>();
+  for (const m of members) memberMap.set(m.userId, m);
+
+  const header = [
+    "TaskId",
+    "Title",
+    "Description",
+    "StatusJa",
+    "Status",
+    "Priority",
+    "DueDate",
+    "AssigneeDisplayName",
+  ];
+
+  const lines: string[] = [];
+  lines.push(header.map(csvEscape).join(","));
+
+  for (const t of tasks) {
+    const assignee =
+      t.assigneeUserId != null ? memberMap.get(t.assigneeUserId)?.displayName ?? `User#${t.assigneeUserId}` : "";
+
+    const row = [
+      t.taskId,
+      t.title,
+      t.description ?? "",
+      statusLabelJa(t.status),
+      t.status,
+      t.priority,
+      formatDateForCsv(t.dueDate),
+      assignee,
+    ];
+
+    lines.push(row.map(csvEscape).join(","));
+  }
+
+  // Excel/Windows互換寄り
+  return lines.join("\r\n");
+}
 
 // apiFetch が throw するエラーの message だけだと ProblemDetails が潰れる可能性があるので、
 // 可能なら “problem+jsonっぽい形” を整形して表示
@@ -136,13 +235,20 @@ export default function ProjectTasksPage() {
   // ✅ me（Leader判定に使う）
   const [me, setMe] = useState<MeResponse | null>(null);
 
+  const [members, setMembers] = useState<ProjectMemberDto[]>([]);
+
   // ✅ 検索・絞り込み
   const [q, setQ] = useState("");
   const [statusF, setStatusF] = useState<TaskState | "All">("All");
   const [prioF, setPrioF] = useState<TaskPriority | "All">("All");
+  const [dueF, setDueF] = useState<DueFilter>("All");
 
   // ✅ ページネーション
   const [page, setPage] = useState(1);
+
+  // ✅ CSVポップアップ
+const [csvOpen, setCsvOpen] = useState(false);
+const [csvFileBase, setCsvFileBase] = useState("");
 
 const title = useMemo(() => {
   if (project?.name) return project.name;
@@ -157,6 +263,18 @@ const title = useMemo(() => {
       setMe(null);
     }
   }
+
+const todayYmd = useMemo(() => ymdNumberFromDate(new Date()), []);
+const dueSoonYmd = useMemo(() => addDaysYmdNumber(todayYmd, 7), [todayYmd]);
+
+  async function loadMembers() {
+  try {
+    const data = await apiFetch<ProjectMemberDto[]>(`/api/v1/projects/${projectId}/members`);
+    setMembers(data);
+  } catch {
+    setMembers([]);
+  }
+}
 
   async function loadTasks() {
     setErr(null);
@@ -188,7 +306,7 @@ async function loadAll() {
   setErr(null);
   setBusy(true);
   try {
-    await Promise.all([loadMe(), loadProject(), loadTasks()]);
+    await Promise.all([loadMe(), loadProject(), loadTasks(), loadMembers()]);
   } finally {
     setBusy(false);
   }
@@ -211,13 +329,51 @@ async function loadAll() {
         const hay = `${t.title} ${t.description ?? ""}`.toLowerCase();
         if (!hay.includes(qq)) return false;
       }
+
+      if (dueF !== "All") {
+        if (t.status === "Done") return false;
+
+        const ymd = toYmdNumber(t.dueDate);
+        if (ymd == null) return false;
+
+        if (dueF === "Overdue") {
+          if (!(ymd < todayYmd)) return false;
+        } else if (dueF === "DueSoon") {
+          if (!(ymd >= todayYmd && ymd <= dueSoonYmd)) return false;
+        }
+      }
       return true;
     });
-  }, [items, q, statusF, prioF]);
+  },[items, q, statusF, prioF, dueF, todayYmd, dueSoonYmd]);
+
+
+const summary = useMemo(() => {
+  const progress = { toDo: 0, doing: 0, blocked: 0, done: 0 };
+  let overdue = 0;
+  let dueSoon = 0;
+
+  for (const t of items) {
+    if (t.status === "ToDo") progress.toDo++;
+    else if (t.status === "Doing") progress.doing++;
+    else if (t.status === "Blocked") progress.blocked++;
+    else if (t.status === "Done") progress.done++;
+
+    if (t.status === "Done") continue;
+    const ymd = toYmdNumber(t.dueDate);
+    if (ymd == null) continue;
+
+    if (ymd < todayYmd) overdue++;
+    else if (ymd >= todayYmd && ymd <= dueSoonYmd) dueSoon++;
+  }
+
+  return { overdue, dueSoon, progress };
+}, [items, todayYmd, dueSoonYmd]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+
+  
   // ページ範囲外を自動補正（削除/絞り込みが入ったときも安全）
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -233,6 +389,13 @@ async function loadAll() {
   const goNext = () => setPage((p) => Math.min(totalPages, p + 1));
 
   const isLeader = me?.role === "Leader";
+
+const isMember = useMemo(() => {
+  if (!me) return false;
+  return members.some((m) => m.userId === me.userId);
+}, [members, me]);
+
+const canCreateTask = isLeader || isMember;
 
   async function archiveProject() {
     if (!confirm("この案件をアーカイブ（削除扱い）します。よろしいですか？")) return;
@@ -250,6 +413,44 @@ async function loadAll() {
     }
   }
 
+async function exportCsvFilteredAll(fileBaseName: string) {
+  try {
+    const csv = buildTasksCsvRows({ tasks: filtered, members });
+    const safeBase = sanitizeFileName(fileBaseName || "tasks");
+    const fileName = `${safeBase}.csv`;
+
+    const blob = new Blob([withUtf8Bom(csv)], { type: "text/csv;charset=utf-8;" });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    setCsvOpen(false);
+  } catch (e: any) {
+    setErr(`CSV出力に失敗しました。\n${formatApiError(e)}`);
+  }
+}
+
+function openCsvDialog() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+
+  // 初期ファイル名（拡張子なし）
+  setCsvFileBase(sanitizeFileName(`${title}_tasks_${yyyy}-${mm}-${dd}`));
+  setCsvOpen(true);
+}
+
+function closeCsvDialog() {
+  setCsvOpen(false);
+}
+
 return (
   <main style={{ minHeight: "100vh", padding: 16, background: "#121212", color: "#e5e7eb" }}>
     <style>{`
@@ -261,6 +462,7 @@ return (
         .spOnly { display: block; }
       }
     `}</style>
+<FullScreenLoading show={busy} label="処理中…" subLabel="ユーザー情報 / メンバー情報を取得しています" />
 
     <div style={{ maxWidth: 1100, margin: "28px auto" }}>
       {/* Header */}
@@ -384,6 +586,43 @@ return (
             </button>
           )}
 
+{canCreateTask && (
+  <button
+    type="button"
+    onClick={() => router.push(`/projects/${projectId}/tasks/new`)}
+    disabled={busy}
+    style={{
+      padding: "10px 12px",
+      borderRadius: 12,
+      border: "1px solid rgba(59,130,246,.35)",
+      background: busy ? "#141414" : "rgba(59,130,246,.14)",
+      color: "#dbeafe",
+      cursor: busy ? "not-allowed" : "pointer",
+      whiteSpace: "nowrap",
+    }}
+    title="タスクを新規作成"
+  >
+    ＋ タスク作成
+  </button>
+)}
+
+<button
+  type="button"
+  onClick={openCsvDialog}
+  disabled={busy || filtered.length === 0}
+  style={{
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(16,185,129,.28)",
+    background: busy || filtered.length === 0 ? "#141414" : "rgba(16,185,129,.12)",
+    color: "#d1fae5",
+    cursor: busy || filtered.length === 0 ? "not-allowed" : "pointer",
+    whiteSpace: "nowrap",
+  }}
+  title="絞り込み後の全件をCSVでダウンロード"
+>
+  ⭳ CSV出力（全件）
+</button>
           <button
             type="button"
             onClick={loadAll}
@@ -402,6 +641,277 @@ return (
           </button>
         </div>
       </header>
+
+{summary && (
+  <section
+    style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+      gap: 12,
+      marginBottom: 16,
+    }}
+  >
+    {/* 期限切れ */}
+    <button
+      type="button"
+      onClick={() => {
+        setDueF("Overdue");
+        setStatusF("All");
+        setPrioF("All");
+        setQ("");
+        setPage(1);
+      }}
+      style={{
+        textAlign: "left",
+        padding: 14,
+        borderRadius: 16,
+        border: "1px solid rgba(239,68,68,.25)",
+        background: "rgba(239,68,68,.08)",
+        color: "#fee2e2",
+        cursor: "pointer",
+      }}
+      title="期限切れを表示"
+    >
+      <div style={{ fontSize: 12, color: "#fecaca" }}>期限切れ</div>
+      <div style={{ marginTop: 6, fontSize: 26, fontWeight: 900 }}>{summary.overdue}</div>
+      <div style={{ marginTop: 6, fontSize: 12, color: "#fca5a5" }}>クリックで絞り込み</div>
+    </button>
+
+    {/* 近日期限 */}
+    <button
+      type="button"
+      onClick={() => {
+        setDueF("DueSoon");
+        setStatusF("All");
+        setPrioF("All");
+        setQ("");
+        setPage(1);
+      }}
+      style={{
+        textAlign: "left",
+        padding: 14,
+        borderRadius: 16,
+        border: "1px solid rgba(245,158,11,.25)",
+        background: "rgba(245,158,11,.08)",
+        color: "#ffedd5",
+        cursor: "pointer",
+      }}
+      title="近日期限を表示（7日以内）"
+    >
+      <div style={{ fontSize: 12, color: "#fed7aa" }}>近日期限（7日以内）</div>
+      <div style={{ marginTop: 6, fontSize: 26, fontWeight: 900 }}>{summary.dueSoon}</div>
+      <div style={{ marginTop: 6, fontSize: 12, color: "#fdba74" }}>クリックで絞り込み</div>
+    </button>
+
+    {/* 進捗 */}
+    <div
+      style={{
+        padding: 14,
+        borderRadius: 16,
+        border: "1px solid rgba(59,130,246,.25)",
+        background: "rgba(59,130,246,.08)",
+        color: "#dbeafe",
+      }}
+    >
+      <div style={{ fontSize: 12, color: "#bfdbfe" }}>進捗サマリー</div>
+
+      <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {(
+          [
+            ["ToDo", summary.progress.toDo],
+            ["Doing", summary.progress.doing],
+            ["Blocked", summary.progress.blocked],
+            ["Done", summary.progress.done],
+          ] as const
+        ).map(([s, n]) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => {
+              setDueF("All");
+              setStatusF(s as any);
+              setPage(1);
+            }}
+            style={{
+              border: "1px solid #2a2a2a",
+              background: "#121212",
+              color: "#e5e7eb",
+              borderRadius: 999,
+              padding: "6px 10px",
+              cursor: "pointer",
+              fontSize: 12,
+            }}
+            title="状態で絞り込み"
+          >
+            {statusLabelJa(s as any)}：<span style={{ fontWeight: 900 }}>{n}</span>
+          </button>
+        ))}
+
+        <button
+          type="button"
+          onClick={() => {
+            setDueF("All");
+            setStatusF("All");
+            setPrioF("All");
+            setQ("");
+            setPage(1);
+          }}
+          style={{
+            border: "1px solid #2a2a2a",
+            background: "#171717",
+            color: "#e5e7eb",
+            borderRadius: 999,
+            padding: "6px 10px",
+            cursor: "pointer",
+            fontSize: 12,
+          }}
+          title="フィルタ解除"
+        >
+          リセット
+        </button>
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 12, color: "#9ca3af" }}>
+        現在の期限フィルタ：<span style={{ color: "#e5e7eb", fontWeight: 800 }}>{dueF}</span>
+      </div>
+    </div>
+  </section>
+)}
+
+{/* CSV Export Dialog */}
+{csvOpen && (
+  <div
+    role="dialog"
+    aria-modal="true"
+    onClick={closeCsvDialog}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,.55)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      zIndex: 1000,
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: "min(560px, 100%)",
+        borderRadius: 16,
+        border: "1px solid #2a2a2a",
+        background: "#171717",
+        boxShadow: "0 18px 60px rgba(0,0,0,.55)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "14px 16px",
+          borderBottom: "1px solid #2a2a2a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div style={{ fontWeight: 800 }}>CSV出力</div>
+        <button
+          type="button"
+          onClick={closeCsvDialog}
+          style={{
+            border: "1px solid #2a2a2a",
+            background: "#121212",
+            color: "#e5e7eb",
+            borderRadius: 12,
+            padding: "6px 10px",
+            cursor: "pointer",
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        <div style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 1.6 }}>
+          絞り込み後の全件をCSVでダウンロードします。
+        </div>
+
+        <div style={{ marginTop: 10, color: "#9ca3af", fontSize: 12 }}>
+          対象件数：<span style={{ color: "#e5e7eb", fontWeight: 800 }}>{filtered.length}</span> 件
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>ファイル名（.csv は自動付与）</div>
+          <input
+            value={csvFileBase}
+            onChange={(e) => setCsvFileBase(e.target.value)}
+            placeholder="例: my_tasks_2026-02-27"
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid #2a2a2a",
+              background: "#121212",
+              color: "#e5e7eb",
+              outline: "none",
+              fontSize: 13,
+            }}
+          />
+          <div style={{ marginTop: 8, color: "#9ca3af", fontSize: 12, lineHeight: 1.6 }}>
+            出力列：TaskId / Title / Description / StatusJa / Status / Priority / DueDate / AssigneeDisplayName
+            <br />
+            文字コード：UTF-8（Excel対策でBOM付き）
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          padding: "12px 16px",
+          borderTop: "1px solid #2a2a2a",
+          display: "flex",
+          gap: 10,
+          justifyContent: "flex-end",
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          onClick={closeCsvDialog}
+          style={{
+            padding: "10px 12px",
+            borderRadius: 12,
+            border: "1px solid #2a2a2a",
+            background: "#121212",
+            color: "#e5e7eb",
+            cursor: "pointer",
+          }}
+        >
+          キャンセル
+        </button>
+
+        <button
+          type="button"
+          onClick={() => exportCsvFilteredAll(csvFileBase)}
+          disabled={busy || filtered.length === 0}
+          style={{
+            padding: "10px 12px",
+            borderRadius: 12,
+            border: "1px solid rgba(16,185,129,.28)",
+            background: busy || filtered.length === 0 ? "#141414" : "rgba(16,185,129,.12)",
+            color: "#d1fae5",
+            cursor: busy || filtered.length === 0 ? "not-allowed" : "pointer",
+            fontWeight: 800,
+          }}
+        >
+          ダウンロード
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Error */}
       {err && (
@@ -525,6 +1035,7 @@ return (
                   setQ("");
                   setStatusF("All");
                   setPrioF("All");
+                  setDueF("All");
                   setPage(1);
                 }}
                 style={{

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef  } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { FullScreenLoading } from "@/components/FullScreenLoading";
 
 type TaskState = "ToDo" | "Doing" | "Blocked" | "Done";
 type TaskPriority = "High" | "Medium" | "Low";
@@ -106,6 +107,8 @@ export default function TaskDetailPage() {
   const [dueDate, setDueDate] = useState<string>(""); // input[type=date] は "yyyy-MM-dd"
   const [priority, setPriority] = useState<TaskPriority>("Medium");
   const [status, setStatus] = useState<TaskState>("ToDo");
+
+  const dueDateRef = useRef<HTMLInputElement>(null);
 
   const isDone = original?.status === "Done";
 
@@ -239,6 +242,7 @@ export default function TaskDetailPage() {
 
   return (
     <main style={{ minHeight: "100vh", padding: 16, background: "#121212", color: "#e5e7eb" }}>
+     <FullScreenLoading show={busy} label="処理中…" subLabel="ユーザー情報 / メンバー情報を取得しています" />
       <div style={{ maxWidth: 980, margin: "28px auto" }}>
         {/* Header */}
         <header
@@ -478,26 +482,53 @@ export default function TaskDetailPage() {
 
             {/* Row */}
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-              {/* DueDate */}
-              <div>
-                <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>期限（yyyy-MM-dd）</div>
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  disabled={busy || isDone}
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    border: "1px solid #2a2a2a",
-                    background: "#121212",
-                    color: "#e5e7eb",
-                    outline: "none",
-                    opacity: isDone ? 0.65 : 1,
-                  }}
-                />
-              </div>
+{/* DueDate */}
+<div>
+  <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>期限（yyyy-MM-dd）</div>
+
+  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <input
+      ref={dueDateRef}
+      type="date"
+      value={dueDate}
+      onChange={(e) => setDueDate(e.target.value)}
+      disabled={busy || isDone}
+      style={{
+        flex: 1,
+        padding: "10px 12px",
+        borderRadius: 12,
+        border: "1px solid #2a2a2a",
+        background: "#121212",
+        color: "#e5e7eb",
+        outline: "none",
+        opacity: isDone ? 0.65 : 1,
+      }}
+    />
+
+    <button
+      type="button"
+      onClick={() => dueDateRef.current?.showPicker?.()}
+      disabled={busy || isDone}
+      style={{
+        padding: "10px 12px",
+        borderRadius: 12,
+        border: "1px solid #2a2a2a",
+        background: busy || isDone ? "#141414" : "#171717",
+        color: "#e5e7eb",
+        cursor: busy || isDone ? "not-allowed" : "pointer",
+        whiteSpace: "nowrap",
+        opacity: busy || isDone ? 0.65 : 1,
+      }}
+      title="カレンダーを開く（対応ブラウザのみ）"
+    >
+      📅
+    </button>
+  </div>
+
+  <div style={{ marginTop: 6, fontSize: 11, color: "#9ca3af" }}>
+    ※ ブラウザによりカレンダー表示は自動です。📅ボタンは対応時のみ動作します。
+  </div>
+</div>
 
               {/* Priority */}
               <div>
