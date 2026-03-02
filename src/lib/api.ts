@@ -1,7 +1,11 @@
-const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-if (!baseUrl) {
-  throw new Error("NEXT_PUBLIC_API_BASE_URL is not set");
+function getBaseUrl(): string {
+  const v = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!v) {
+    // build時の prerender で import されても落とさない。
+    // 実際にAPIを呼ぶ段階でエラーにする。
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not set");
+  }
+  return v;
 }
 
 export type AuthTokenResponse = { token: string };
@@ -73,7 +77,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${baseUrl}${path}`, { ...init, headers });
+const baseUrl = getBaseUrl();
+const res = await fetch(`${baseUrl}${path}`, { ...init, headers });
 
   if (!res.ok) {
     const msg = await readErrorMessage(res);
@@ -100,10 +105,10 @@ export async function login(email: string, password: string) {
   localStorage.setItem("token", data.token);
 
   // ✅ middleware用にcookieへ（簡易版）
-  document.cookie = `token=${encodeURIComponent(data.token)}; path=/; SameSite=Lax`;
+  // document.cookie = `token=${encodeURIComponent(data.token)}; path=/; SameSite=Lax`;
 }
 
 export function logout() {
   localStorage.removeItem("token");
-  document.cookie = "token=; path=/; Max-Age=0; SameSite=Lax";
+  // document.cookie = "token=; path=/; Max-Age=0; SameSite=Lax";
 }
