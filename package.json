@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start -p $PORT",
-    "lint": "eslint"
+    "lint": "eslint ."
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "next": "16.1.6",
