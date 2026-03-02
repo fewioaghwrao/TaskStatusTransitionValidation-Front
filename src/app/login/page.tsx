@@ -27,7 +27,7 @@ export default function LoginPage() {
 
   const onSubmit = async () => {
     setErr(null);
-
+    if (busy) return;
     // 軽いクライアント側バリデーション
     const e = email.trim();
     if (!e || !password) {
@@ -42,8 +42,9 @@ export default function LoginPage() {
     try {
       setBusy(true);
       await login(e, password);
-      r.push("/projects");
-      r.refresh(); // App Routerでセッション反映させたいとき用（不要なら消してOK）
+  const next = new URLSearchParams(window.location.search).get("next");
+  r.replace(next ?? "/projects");
+
     } catch (ex: any) {
       setErr(ex?.message ?? "ログインに失敗しました。入力内容をご確認ください。");
     } finally {
@@ -206,7 +207,9 @@ export default function LoginPage() {
                     cursor: "pointer"
                   }}
                 >
-                  {showPw ? "🙈" : "👁️"}
+
+  {showPw ? "隠す" : "表示"}
+
                 </button>
               </div>
             </div>
