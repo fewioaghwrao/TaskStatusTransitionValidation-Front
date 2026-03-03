@@ -33,6 +33,9 @@
 
 ---
 
+## 🔗 関連リポジトリ
+- Backend / API（ASP.NET Core）: https://github.com/fewioaghwrao/TaskStatusTransitionValidation-API
+
 ## 📌 このアプリでできること
 
 - 案件（プロジェクト）単位でのタスク管理
