@@ -6,33 +6,6 @@
 
 ---
 
-## 🔗 デモサイト（実働）
-
-- フロントエンド  
-  https://taskstsv-fe-ezaecmh0f4azctdw.japaneast-01.azurewebsites.net/login
-
-- バックエンド Health  
-  https://taskstsv-be-cacjavgfebh2bucp.japaneast-01.azurewebsites.net/health
-
-- Swagger（API仕様）  
-  https://taskstsv-be-cacjavgfebh2bucp.japaneast-01.azurewebsites.net/swagger/index.html
-
----
-
-## 🔐 デモログイン情報
-
-※デモ環境のため登録不要です。
-
-- **Leader（管理者）**
-  - Email: `demo1@example.com`
-  - Password: `Demo1234!`
-
-- **Member（作業者）**
-  - Email: `demo2@example.com`
-  - Password: `Demo1234!`
-
----
-
 ## 🔗 関連リポジトリ
 - Backend / API（ASP.NET Core）: https://github.com/fewioaghwrao/TaskStatusTransitionValidation-API
 
@@ -134,7 +107,7 @@
 - TypeScript
 - Tailwind CSS
 - Fetch API
-- Azure App Service（Linux）
+- Cloud環境（検証用）
 
 ---
 
