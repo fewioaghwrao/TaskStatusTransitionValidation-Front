@@ -47,6 +47,8 @@ jobs:
           api_location: ""
           output_location: ""
           github_id_token: ${{ steps.idtoken.outputs.result }}
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
