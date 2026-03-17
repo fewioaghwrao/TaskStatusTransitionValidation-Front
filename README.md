@@ -1,13 +1,31 @@
 # 案件タスク管理 Lite（Frontend）
 
-小規模チーム向けの **案件・タスク管理 Webアプリ** です。  
+小規模チーム向けの **案件・タスク管理 Webアプリケーション** です。
 案件単位でタスクを管理し、**状態遷移ルールをサーバー側で検証**することで、  
-進捗が形骸化しにくいタスク管理を目的としています。
+進捗状況をルールに沿って管理しやすいタスク管理を目的としています。
 
 ---
 
 ## 🔗 関連リポジトリ
 - Backend / API（ASP.NET Core）: https://github.com/fewioaghwrao/TaskStatusTransitionValidation-API
+
+---
+
+## 🌐 デモ
+
+**デモサイト**: https://yellow-tree-06abc4d00.4.azurestaticapps.net/login
+
+以下のテストアカウントでお試しいただけます。
+
+| 役割 | メールアドレス | パスワード |
+|------|--------------|----------|
+| Leader | demo1@example.com | Demo1234! |
+| Member | demo2@example.com | Demo1234! |
+
+> Leader / Member で操作できる機能が異なります。役割ごとの機能差は[こちら](#-役割ごとの機能差)をご参照ください。
+> 本デモはコストを考慮し、Azure Static Web Apps 上で公開しています。 
+
+---
 
 ## 📌 このアプリでできること
 
@@ -51,7 +69,8 @@
 ![CSV出力モーダル](docs/images/D_csv_export_modal.png)
 
 **CSV出力仕様（概要）**  
-> UTF-8 / カンマ区切り、列：案件名・タスク名・状態・優先度・期限・担当者・作成日時・更新日時
+UTF-8 / カンマ区切り  
+出力列：案件名、タスク名、状態、優先度、期限、担当者、作成日時、更新日時
 
 ---
 
@@ -107,7 +126,7 @@
 - TypeScript
 - Tailwind CSS
 - Fetch API
-- Cloud環境（検証用）
+- Azure Static Web Apps（フロント公開）
 
 ---
 
